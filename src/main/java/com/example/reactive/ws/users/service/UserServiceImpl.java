@@ -7,6 +7,7 @@ import com.example.reactive.ws.users.models.response.UserResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -32,9 +33,14 @@ public class UserServiceImpl implements UserService {
                 .mapNotNull(this::convertUserRequestToUserEntity)
                 .flatMap(userRepository::save)
                 .mapNotNull(this::convertUserEntityToUserResponse)
-                .onErrorMap(DuplicateKeyException.class,
-                        exception -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                exception.getMessage()));
+                .onErrorMap(throwable -> {
+                    if (throwable instanceof DuplicateKeyException) {
+                        throw new ResponseStatusException(HttpStatus.CONFLICT, throwable.getMessage());
+                    } else if (throwable instanceof DataIntegrityViolationException) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, throwable.getMessage());
+                    }
+                    throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, throwable.getMessage());
+                });
     }
 
     @Override
